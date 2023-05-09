@@ -12,8 +12,8 @@ var BOTID = '1077430674811793498';
 var CLOSERROLEID = '1073787971003752588';
 //contains all the info for sourcing 
 const sourcers = [
-  {discordId:'1073664693954150410', sheetsId:'1CAJouIkDgqelJxRztcEu1DkFDYqs9Zt5yw_pISrKCf8', sheetsName:'Sheet1'}, //myran
-  {discordId:'935801793290567730', sheetsId:'1cXktCUd3sD1UuM8SitjiWYd66si5l4BdMrum8rHe0Ec', sheetsName:'Sheet1'} //melody
+  {discordId:'1101970914243002430', sheetsId:'1CAJouIkDgqelJxRztcEu1DkFDYqs9Zt5yw_pISrKCf8', sheetsName:'Sheet1'}, //myran
+  {discordId:'1101965894139252776', sheetsId:'1cXktCUd3sD1UuM8SitjiWYd66si5l4BdMrum8rHe0Ec', sheetsName:'Sheet1'} //melody
 ]
 //quick look up for sourcing
 const sourcersDiscordIds = [];
