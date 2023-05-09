@@ -1,21 +1,20 @@
 require('dotenv').config();
-const {Client, IntentsBitField, ActionRowBuilder, Events, ModalBuilder, TextInputBuilder, TextInputStyle} = require('discord.js');
+const {Client, IntentsBitField} = require('discord.js');
 const {google} = require("googleapis");
 const fetchAll = require('discord-fetch-all');
 const fetch = require("node-fetch");
-const { GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const https = require('https');
-const { nextTick, connected } = require('process');
-const { licensing } = require('googleapis/build/src/apis/licensing');
 
 //VARS
 var CHANNELID = process.env.DISCORD_CHANNELID;
 var BOTID = '1077430674811793498';
-var ADMINS = process.env.DISCORD_ADMINS;
-var DISCORDMEMBERSHEET = null;
 var CLOSERROLEID = '1073787971003752588';
 //contains all the info for sourcing 
-const sourcers = [{discordId:'1073664693954150410',sheetsId:'1CAJouIkDgqelJxRztcEu1DkFDYqs9Zt5yw_pISrKCf8',sheetsName:'Sheet1'}]
+const sourcers = [
+  {discordId:'1073664693954150410', sheetsId:'1CAJouIkDgqelJxRztcEu1DkFDYqs9Zt5yw_pISrKCf8', sheetsName:'Sheet1'}, //myran
+  {discordId:'935801793290567730', sheetsId:'1cXktCUd3sD1UuM8SitjiWYd66si5l4BdMrum8rHe0Ec', sheetsName:'Sheet1'} //melody
+]
 //quick look up for sourcing
 const sourcersDiscordIds = [];
 sourcers.forEach(e => {
@@ -81,8 +80,10 @@ const SPREADSHEETID = process.env.SPREADSHEETID;
   })
 
 
-
+//creates the new embeds
 async function botResend(message) {
+  
+
   message.delete();
   try {
   if (!isNaN(+message.content)) {
@@ -99,33 +100,35 @@ async function botResend(message) {
       range: `${sourcer.sheetsName}!B${messageNumber}:N${messageNumber}`
     })
     
-  
+    if (data.data.values == undefined) {throw new Error('no data in selected row')}
   const d = data.data.values[0];
-  let discount = '';
+  let discount = '\u200B';
   if (d.length > 11) {
     for(i=0;i<d.length-11;i++) {
       discount+=d[11+i];
       discount+='\n';
     }
   }
+  let avatar = client.user.displayAvatarURL();
   const embed = new EmbedBuilder()
   .setTitle(d[6])
   .setDescription('send by: <@'+message.author+'>')
+  .setColor(0xdead28)
+  .setFooter({iconURL:avatar,text:'reply with the amount you purchase'})
   .addFields(
     {name:'Source Link', value:`[click](${d[1]})`, inline:true},
     {name:'Amazon Link', value:`[click](${d[3]})`, inline:true},
     {name:'Asin', value:d[7], inline:true},
     {name:'Cost', value:d[2], inline:true},
     {name:'BB Price', value:d[4], inline:true},
-    {name:'ROI/Profit', value:d[9]+'/'+d[8], inline:true},
+    {name:'ROI/Profit', value:d[9]+' / '+d[8], inline:true},
     {name:'Rank', value:d[5], inline:true},
     {name:'Category', value:d[10],inline:true},
+    {name:'Amount Purchased', value:'0',inline:true},
     {name:'\u200B', value:'\u200B'},
     {name:'Notes/Discount', value:discount, inline:true},
-    )
-    .addFields(
-      {name:'Amount Purchased', value:'0'}
-    )
+    );
+
 
     message.channel.send({embeds:[embed]})
     .then(msg => {
@@ -135,24 +138,31 @@ async function botResend(message) {
     .catch(console.error);
   }
 } catch(error) {
-  console.log(error.message)
+  console.log(error)
 }
 }
 
+//edits the embed to update amount purchased
 function botEditEmbed(msg,content,username) {
   try {
   let emb = msg.embeds[0];
   let fields = emb.data.fields;
   let embAmount = 0;
   let index = 0;
+  let asin = '';
   for(i=0;i<fields.length;i++) {
     let e = fields[i];
     if (e.name=='Amount Purchased') {
       embAmount=+e.value;
       index = i;
     }
+    if (e.name=='Asin') {
+      asin=e.value;
+    }
     if (e.name=='') {
       e.name='\u200B';
+    }
+    if (e.value=='') {
       e.value='\u200B';
     }
   };
@@ -160,20 +170,16 @@ function botEditEmbed(msg,content,username) {
   if (!isNaN(+content)) {
     if (+content > 4000) return;
     total = Number(embAmount)+Number(content);
-    AddRow(msg,+content,username);
-    //edit message
-    //message.edit(`${contentEdit}\n:Amount-Purchased: ${total}`);
+    AddRow(msg,+content,username,asin);
     fields[index].value = `${total}`;
-    console.log(emb);
-    //let embed = new EmbedBuilder().setFields(fields);
-    //msg.edit({embeds:[embed]});
-    //emb.setFields(fields);
+    msg.edit({embeds:[emb]});
   }
 } catch(error) {
   console.log(error.message);
 }
 }
 
+//gets a new date
 function getNewDate() {
   var currentdate = new Date(); 
 var datetime = currentdate.getDate() + "/"
@@ -185,7 +191,8 @@ var datetime = currentdate.getDate() + "/"
   return datetime;
 }
 
-function AddRow(msg,number,username) {
+//adds a row to the spread sheet when someone buys a lead
+function AddRow(msg,number,username,asin=' ') {
   googleSheets.spreadsheets.values.append({
     auth,
     spreadsheetId:SPREADSHEETID,
@@ -193,12 +200,13 @@ function AddRow(msg,number,username) {
     valueInputOption: "USER_ENTERED",
     resource: {
       values: [
-        [username,number,msg.id,getNewDate()]
+        [username,number,msg.id,getNewDate(),asin]
       ]
     }
   }).catch(console.error);
 }
 
+//oldschool bot edit for the old style of messages
 function botEdit(message,edit,username) {
   if (!isNaN(+edit)) {
     contentEdit = message.content.substring(0,message.content.lastIndexOf("\n"));
@@ -245,19 +253,11 @@ t.json().then(s=> {
     return false;
   } else {
 
-    getUserSales(email).then(s=> {
-
-      //TO DO GET THE DATE SIGN UP AND LOG IT TO THE SHEETS WITH A NEW FEILD CALLED NEXT PAYMENT.
-      //THE DATA ALSO HAS WEATHER SOMEONE CANCELED SO ALL YOU HAVE TO DO IS CHECK EVERY DAY IF SOMEONE CANCELED
-      //THAN SEE IF ITS THE DAY AND IF SO REMOVE THE CLOSUER RANK.   
 
       addUserToDb([id,email,user,licenseKey,tname]);
       role = message.guild.roles.cache.get(CLOSERROLEID)
       message.member.roles.add(role);
       console.log(id,email,user,licenseKey);
-    }).catch(error=> {
-      console.log(error.message);
-    })
   }
   });
 }).catch(error=> {
@@ -269,6 +269,7 @@ t.json().then(s=> {
 }
 
 
+//addes a user to the database when someone joins
 const addUserToDb = (arr) => {
   USERS.push(arr);
   googleSheets.spreadsheets.values.append({
@@ -334,6 +335,7 @@ function getUserSales(email,pass=undefined) {
 
 //CHECK USERS IF THEY SHOULD BE RENMOVED FROM THE GROUP OR NOT;
 function checkUserExpire() {
+  try {
   let curtime = new Date();
   console.log('checking for expired users at '+ curtime.toJSON());
   updateUsers().then( s=> {
@@ -347,11 +349,20 @@ function checkUserExpire() {
           res[res.length-1].forEach(user => {
             if (user.cancelled && user.dead) {
               //message owners to remove twitter user.
+              
 
               client.guilds.fetch('1073665429416988763').then(s=> {
+                  //remove user id
                 s.members.fetch(res[1][0][0]).then(res1=> {
                   res1.roles.remove('1073787971003752588');
                 }).catch(console.error);
+                
+                  //message us to remvoe them
+                  s.members.fetch({user:['1073664693954150410','935801793290567730']}).then(m=>{
+                    m.forEach(r=> {
+                      r.send('remove user: '+user.purchase.email);
+                    })
+                  })
               })
               
               googleSheets.spreadsheets.values.append({
@@ -373,10 +384,13 @@ function checkUserExpire() {
 
     }
   })
+} catch(error) {
+  console.log(error.message);
+}
 }
 
 
-//setInterval(checkUserExpire,21600000);
+setInterval(checkUserExpire,21600000);
 
 
 //HELPER FOR KILLER
@@ -446,5 +460,4 @@ client.login(
 process.env.DISCORD_TOKEN
 );
 
-
-//checkUserExpire();
+checkUserExpire();
